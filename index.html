@@ -187,9 +187,7 @@
     #chat-container { scroll-behavior: auto; }
   }
 
-  /* Voice toggle */
-  #voice-toggle { margin-top: 8px; padding: 8px 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.28); background: linear-gradient(160deg, rgba(255,255,255,0.30), rgba(255,255,255,0.14)); color: #fff; font-size: 12px; cursor: pointer; backdrop-filter: blur(12px) saturate(140%); -webkit-backdrop-filter: blur(12px) saturate(140%); box-shadow: 0 8px 22px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.3); }
-  #voice-toggle:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.36); }
+ 
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -203,7 +201,6 @@
     <input type="text" id="name" placeholder="Your Name (optional)">
     <input type="text" id="whatsapp" placeholder="WhatsApp Number (optional)">
     <button id="start-btn">Start Chat</button>
-    <button id="voice-toggle" type="button" aria-pressed="true">🔈 Voice: On</button>
   </div>
 
   <div id="chat">
@@ -352,10 +349,10 @@
     if (instaFloat) { instaFloat.style.display = 'grid'; instaFloat.setAttribute('aria-hidden','false'); }
     if (lbFloat) { lbFloat.style.display = 'grid'; }
     currentUserName = name || 'Anonymous';
-    // Announce start if voice enabled
-    if (voiceEnabled) { speak('Starting chat. Ask anything about your degree.'); }
-    // Personalized welcome
+    // Greet by name on start
     const displayName = name || 'friend';
+    speak(`Hello ${displayName}, kaise ho?`);
+    // Personalized welcome
     const welcome = document.createElement('div');
     welcome.className = 'message bot';
     chatContainer.appendChild(welcome);
@@ -562,45 +559,46 @@
   }
 
   // Jarvis-like voice greeting (Web Speech API)
-  const voiceToggle = document.getElementById('voice-toggle');
-  let voiceEnabled = true;
   let firstGreetingDone = false;
-  function pickVoice(hint='en') {
-    const list = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-    return list.find(v=>/en/i.test(v.lang) && /male|uk|us|english/i.test(v.name)) || list.find(v=>/en/i.test(v.lang)) || list[0] || null;
+  function pickFemaleEnglishVoice() {
+    if (!window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = ['Google UK English Female','Google US English','Samantha','Victoria','Allison','Joanna','Tessa','Veena','Serena','Moira'];
+    const byName = voices.find(v => preferred.some(n => v.name && v.name.toLowerCase().includes(n.toLowerCase())));
+    if (byName) return byName;
+    const enVoices = voices.filter(v=>/en/i.test(v.lang));
+    return enVoices[0] || voices[0] || null;
   }
   function speak(text, opts={}) {
-    if (!voiceEnabled || !window.speechSynthesis) return;
+    if (!window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(text);
-    u.pitch = opts.pitch != null ? opts.pitch : 0.85;
+    u.pitch = opts.pitch != null ? opts.pitch : 1.02; // slightly higher for a female tone
     u.rate = opts.rate != null ? opts.rate : 0.98;
     u.volume = opts.volume != null ? opts.volume : 1;
-    const v = pickVoice(opts.voiceHint || 'en');
+    const v = pickFemaleEnglishVoice();
     if (v) u.voice = v;
     try { window.speechSynthesis.cancel(); } catch(_){}
     window.speechSynthesis.speak(u);
   }
   function playGreeting() {
-    if (firstGreetingDone || !voiceEnabled) return;
+    if (firstGreetingDone) return;
     firstGreetingDone = true;
     // tiny earcon then speech
+    try { if (window.speechSynthesis) window.speechSynthesis.resume(); } catch(_){}
     playUiSound('receive');
     setTimeout(()=>{
-      speak('Welcome to the I I T M B S A I bot. Click Start Chat to begin.', { pitch: 0.85, rate: 0.97, volume: 0.95 });
+      speak('This A I chatbot is made by Prabhav. Click on Start Chat to proceed.');
     }, 120);
   }
-  if (voiceToggle) {
-    voiceToggle.addEventListener('click', ()=>{
-      voiceEnabled = !voiceEnabled;
-      voiceToggle.setAttribute('aria-pressed', String(voiceEnabled));
-      voiceToggle.textContent = voiceEnabled ? '🔈 Voice: On' : '🔇 Voice: Off';
-      if (!voiceEnabled && window.speechSynthesis) try { window.speechSynthesis.cancel(); } catch(_){}
-    });
-  }
-  // Attempt greeting shortly after load; also bind to first user interaction as fallback
   window.addEventListener('load', ()=>{
-    setTimeout(playGreeting, 600);
-    const firstInteract = ()=>{ playGreeting(); document.removeEventListener('pointerdown', firstInteract, true); };
+    try { if (window.speechSynthesis) window.speechSynthesis.getVoices(); } catch(_){}
+    setTimeout(playGreeting, 2000);
+    // If voices load late, try once more
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = ()=>{ if (!firstGreetingDone) playGreeting(); };
+    }
+    // Fallback: first user interaction (in case autoplay is blocked)
+    const firstInteract = ()=>{ if (!firstGreetingDone) playGreeting(); document.removeEventListener('pointerdown', firstInteract, true); };
     document.addEventListener('pointerdown', firstInteract, true);
   });
 
